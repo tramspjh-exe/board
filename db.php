@@ -3,7 +3,7 @@
 $host = 'localhost'; 
 $db   = 'board';    
 $user = 'root';      
-$pass = '';  
+$pass = 'jh0116pjh**';  
 $charset = 'utf8mb4';
 
 try {
