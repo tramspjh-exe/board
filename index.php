@@ -48,6 +48,9 @@ $posts = $stmt->fetchAll();
         <a href="logout.php"><button>로그아웃</button></a>
     </div>
 
+    <div style="text-align: left; margin-bottom: 10px;">
+        <a href="user_search.php"><button style="background-color: #e7e7e7;">🔍 유저 검색 페이지로 이동</button></a>
+    </div>
     <h1>📋 <?= ($board_type === 'free') ? '자유 게시판' : 'Q&A 게시판' ?></h1>
 
     <div style="margin-bottom: 20px;">
