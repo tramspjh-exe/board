@@ -3,21 +3,22 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+session_start();
 require 'db.php';
 
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-
-if ($id <= 0) {
-    echo "잘못된 접근입니다.";
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
     exit;
 }
+
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $stmt = $pdo->prepare("SELECT p.*, u.username FROM posts p JOIN users u ON p.author_id = u.id WHERE p.id = :id");
 $stmt->execute([':id' => $id]);
 $post = $stmt->fetch();
 
 if (!$post) {
-    echo "존재하지 않는 게시글입니다.";
+    echo "<script>alert('존재하지 않는 게시글입니다.'); location.href='index.php';</script>";
     exit;
 }
 
@@ -31,73 +32,79 @@ $comments = $c_stmt->fetchAll();
 <head>
     <meta charset="UTF-8">
     <title><?= htmlspecialchars($post['title']) ?></title>
+    <script>
+        function editComment(commentId, currentContent) {
+            var newContent = prompt("댓글을 수정하세요:", currentContent);
+            if (newContent !== null && newContent.trim() !== "") {
+                var form = document.createElement("form");
+                form.method = "POST";
+                form.action = "comment_edit.php";
+
+                var idInput = document.createElement("input");
+                idInput.type = "hidden";
+                idInput.name = "id";
+                idInput.value = commentId;
+                form.appendChild(idInput);
+
+                var contentInput = document.createElement("input");
+                contentInput.type = "hidden";
+                contentInput.name = "content";
+                contentInput.value = newContent;
+                form.appendChild(contentInput);
+
+                var postIdInput = document.createElement("input");
+                postIdInput.type = "hidden";
+                postIdInput.name = "post_id";
+                postIdInput.value = "<?= $id ?>";
+                form.appendChild(postIdInput);
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
 </head>
 <body>
+    <p><a href="index.php?board=<?= $post['board_type'] ?>">⬅️ 목록으로 돌아가기</a></p>
+    
     <h1><?= htmlspecialchars($post['title']) ?></h1>
-    <p><strong>작성자:</strong> <?= htmlspecialchars($post['username']) ?> | <strong>작성일:</strong> <?= $post['created_at'] ?></p>
+    <p>작성자: <?= htmlspecialchars($post['username']) ?> | 작성일: <?= $post['created_at'] ?></p>
     <hr>
-    <div style="min-height: 200px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; margin-bottom: 20px;">
+    <div style="min-height: 200px; padding: 10px; border: 1px solid #ccc;">
         <?= nl2br(htmlspecialchars($post['content'])) ?>
     </div>
-
-    <?php if (!empty($post['stored_path'])): ?>
-        <p><strong>첨부파일:</strong> <a href="download.php?file=<?= urlencode($post['stored_path']) ?>"><?= htmlspecialchars($post['original_name']) ?></a></p>
-    <?php endif; ?>
     
-    <a href="index.php"><button>목록으로</button></a>
-    <a href="edit.php?id=<?= $id ?>"><button>수정</button></a>
-    <a href="delete_process.php?id=<?= $id ?>" onclick="return confirm('정말 삭제하시겠습니까?');"><button>삭제</button></a>
+    <?php if (!empty($post['stored_path'])): ?>
+        <p>📎 첨부파일: <a href="download.php?file=<?= urlencode($post['stored_path']) ?>"><?= htmlspecialchars($post['original_name']) ?></a></p>
+    <?php endif; ?>
+
+    <?php if ($_SESSION['user_id'] == $post['author_id']): ?>
+        <br>
+        <a href="edit.php?id=<?= $post['id'] ?>"><button>글 수정</button></a>
+        <a href="delete_process.php?id=<?= $post['id'] ?>" onclick="return confirm('정말 삭제하시겠습니까?');"><button>글 삭제</button></a>
+    <?php endif; ?>
+
     <hr>
+    <h3>💬 댓글 (<?= count($comments) ?>)</h3>
+    
+    <?php foreach ($comments as $comment): ?>
+        <div style="border-bottom: 1px dashed #ccc; padding: 5px 0;">
+            <strong><?= htmlspecialchars($comment['username']) ?></strong>: <?= htmlspecialchars($comment['content']) ?>
+            
+            <?php if ($_SESSION['user_id'] == $comment['author_id']): ?>
+                <span style="font-size: 12px; margin-left: 10px;">
+                    <a href="#" onclick="editComment(<?= $comment['id'] ?>, '<?= addslashes(htmlspecialchars($comment['content'])) ?>'); return false;">[수정]</a>
+                    <a href="comment_delete.php?id=<?= $comment['id'] ?>&post_id=<?= $id ?>" onclick="return confirm('댓글을 삭제할까요?');">[삭제]</a>
+                </span>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
 
-    <h3>댓글 목록</h3>
-    <div style="margin-bottom: 20px;">
-        <?php if (empty($comments)): ?>
-            <p>작성된 댓글이 없습니다.</p>
-        <?php else: ?>
-            <?php foreach ($comments as $comment): ?>
-                <div style="border-bottom: 1px dashed #ccc; padding: 5px 0;">
-                    <strong><?= htmlspecialchars($comment['username']) ?></strong> (<?= $comment['created_at'] ?>)
-                    <span style="font-size: 12px; margin-left: 10px;">
-                        <a href="#" onclick="editComment(<?= $comment['id'] ?>, '<?= urlencode($comment['content']) ?>', <?= $id ?>); return false;">수정</a> | 
-                        <a href="comment_delete.php?id=<?= $comment['id'] ?>&post_id=<?= $id ?>" onclick="return confirm('댓글을 삭제하시겠습니까?');">삭제</a>
-                    </span>
-                    <br>
-                    <?= nl2br(htmlspecialchars($comment['content'])) ?>
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-
+    <br>
     <form action="comment_process.php" method="POST">
         <input type="hidden" name="post_id" value="<?= $id ?>">
         <textarea name="content" rows="3" style="width: 100%;" required placeholder="댓글을 입력하세요."></textarea><br>
-        <button type="submit" style="margin-top: 5px;">댓글 등록</button>
+        <button type="submit">댓글 등록</button>
     </form>
-
-    <script>
-    function editComment(commentId, currentContent, postId) {
-        var newContent = prompt("댓글을 수정하세요:", decodeURIComponent(currentContent.replace(/\+/g, ' ')));
-        if (newContent !== null && newContent.trim() !== "") {
-            var form = document.createElement("form");
-            form.method = "POST";
-            form.action = "comment_edit.php";
-            
-            var i1 = document.createElement("input");
-            i1.type = "hidden"; i1.name = "id"; i1.value = commentId;
-            form.appendChild(i1);
-            
-            var i2 = document.createElement("input");
-            i2.type = "hidden"; i2.name = "content"; i2.value = newContent;
-            form.appendChild(i2);
-            
-            var i3 = document.createElement("input");
-            i3.type = "hidden"; i3.name = "post_id"; i3.value = postId;
-            form.appendChild(i3);
-            
-            document.body.appendChild(form);
-            form.submit();
-        }
-    }
-    </script>
 </body>
 </html>
